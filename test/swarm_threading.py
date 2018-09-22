@@ -9,7 +9,7 @@ import socket
 import time
 import math
 import threading
-import numpy 
+import numpy
 from dronekit import connect, VehicleMode, LocationGlobalRelative, Command, LocationGlobal
 from pymavlink import mavutil
 
@@ -19,7 +19,7 @@ from pymavlink import mavutil
 #-- Define arm and takeoff
 def arm_and_takeoff(altitude):
 
-	while not vehicle.is_armable: 
+	while not vehicle.is_armable:
 		print("waiting to be armable")
 		time.sleep(1)
 
@@ -27,7 +27,7 @@ def arm_and_takeoff(altitude):
 	vehicle.mode = VehicleMode("GUIDED")
 	vehicle.armed = True
 
-	while not vehicle.armed: 
+	while not vehicle.armed:
 		time.sleep(1)
 
 	print("Taking Off")
@@ -67,21 +67,21 @@ def UDPbroadcast(vehicle,s,b_msg):
         	vehicle._airspeed,
         	vehicle._groundspeed ]
 	s.sendto(str(b_msg).encode('utf-8'), (network, PORT))
-	
- 
+
+
 def UDPlistener(vehicle,s,Swarm_vehicle,cmd,broadcast_rate):
 	try:
 	    while True:
 	    	current = time.time()
             elapsed = 0.0
-	    	UDPbroadcast(vehicle,s,b_msg)
-			data, address = s.recvfrom(1024)
+            UDPbroadcast(vehicle,s,b_msg)
+            data, address = s.recvfrom(1024)
 			#print('Server received from {}:{}'.format(address, data.decode('utf-8')))
-			datadecode = data[1:len(data)-1].split(',')
-			vehicleID = int(datadecode[0]) 
+            datadecode = data[1:len(data)-1].split(',')
+            vehicleID = int(datadecode[0])
 			#print(address)
 			#print(datadecode)
-			if vehicleID == 65535:
+            if vehicleID == 65535:
 				print('get conmmand')
 				if datadecode[1] == 0.0 :
 					cmd = 'Takeoff'
@@ -101,18 +101,18 @@ def UDPlistener(vehicle,s,Swarm_vehicle,cmd,broadcast_rate):
 					cmd = 'RTL'
 					print('RTL')
 
-			if vehicleID != vehicle._heartbeat_system :
+            elif vehicleID != vehicle._heartbeat_system :
 				print(address)
 				print(datadecode)
 				Swarm_vehicle[vehicleID-1][0] = int(datadecode[0])
 				for k in range(1,len(datadecode)):
 					Swarm_vehicle[vehicleID-1][k] = float(datadecode[k])
-			
+
             while elapsed < broadcast_rate:
           		elapsed = time.time() - current
 	except Exception,error:
-        print "Error on UDPlistener thread: "+str(error)
-        UDPlistener(vehicle,s,Swarm_vehicle,rate):
+		print("Error on UDPlistener thread: "+str(error))
+		UDPlistener(vehicle,s,Swarm_vehicle,broadcast_rate)
 
 def OffboardCtrl(vehicle,Swarm_vehicle,cmd,mode,control_rate):
 	while True:
@@ -125,10 +125,10 @@ def OffboardCtrl(vehicle,Swarm_vehicle,cmd,mode,control_rate):
 		   mode = 'AIR'
 		   print('>> Takeoff to 10m')
 
-		if cmd == 'Swarm' && mode == 'AIR':
+		if ((cmd == 'Swarm') & (mode == 'AIR')):
 			print('>> Switch to Swarm')
 
-		if cmd == 'Mission'&& mode == 'AIR':
+		if ((cmd == 'Mission') & (mode == 'AIR')):
 
 			mode = 'MISSIOM'
 			ChangeMode(vehicle,'auto')
@@ -140,8 +140,8 @@ def OffboardCtrl(vehicle,Swarm_vehicle,cmd,mode,control_rate):
 			mode = 'BACK'
 			print(">> Time to go home")
 
-	    while dt < control_rate:
-	        dt = time.time() - time0
+		while dt < control_rate:
+			dt = time.time() - time0
 
 def Swarm(Vehicle,Swarm_vehicle):
 	print('Swarm offboard control')
@@ -152,7 +152,7 @@ gnd_speed 			= 8                	# [m/s]
 radius			= 80               	# [m]
 max_lat_speed		= 4                  # [m/s]
 k_err_vel			= 0.2	# [1/s]
-n_turns			= 3		
+n_turns			= 3
 direction			= 1		# 1 cw, -1 ccw
 b_msg = [1.0,
 		0.0,
@@ -178,6 +178,9 @@ Swarm_vehicle = [[0 for i in range(len(b_msg))] for j in range(Swarm_No)]
 broadcast_rate = 0.01 # 100 hz loop cycle
 control_rate = 0.1 # 10 hz loop cycle
 
+#------------------------------------------------------------
+#-----------Define UDP socket
+#------------------------------------------------------------
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 PORT = 1060
@@ -186,32 +189,38 @@ s.bind(('', PORT))
 print('Listening for broadcast at ', s.getsockname())
 time.sleep(1)
 
- #----------------------------------------------------------
- #--------------CONNECTION-------------------------------
- #-------Connect to the vehicle
+#----------------------------------------------------------
+#--------------CONNECTION-------------------------------
+#-------Connect to the vehicle
 
-print("Connecting.....")
+print("Connecting Vehicle.....")
 vehicle = connect('udp:127.0.0.1:14561')
 #vehicle = connect('/dev/tty0')
 
-
+#-----------------------------------------------------------------------
+#--------------Define threads
+#-----------------------------------------------------------------------
+vehicleThreads = []
+T1 = threading.Thread(target=UDPlistener,args=(vehicle,s,Swarm_vehicle,cmd,broadcast_rate))
+vehicleThreads.append(T1)
+T2 = threading.Thread(target=OffboardCtrl,args=(vehicle,Swarm_vehicle,cmd,mode,control_rate))
+vehicleThreads.append(T2)
 
 
  #----------------------------------------------------------
  #--------------MAIN FUNTION
  #----------------------------------------------------------
-vehicleThreads[]
-T1 = threading.Thread(target=UDPlistener)
-vehicleThreads.append(T1)
-T2 = threading.Thread(target=OffboardCtrl)
-vehicleThreads.append(T2)
-try:
-	vehicleThread.daemon=True
-    vehicleThreads.start()
-except Exception,error:
-    print "Error on main script thread: "+str(error)
 
 
-arm_and_takeoff(10)
-    
+if __name__ == '__main__':
+
+    try:
+        for t in vehicleThreads:
+			t.setDaemon(True)
+			t.start()
+    except Exception,error:
+        print( "Error on main script thread: "+str(error))
+        vehicle.close()
+
+
 
