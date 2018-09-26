@@ -70,78 +70,78 @@ def UDPbroadcast(vehicle,s,b_msg):
 
 
 def UDPlistener(vehicle,s,Swarm_vehicle,cmd,broadcast_rate):
-	try:
-	    while True:
-	    	current = time.time()
+    try:
+        while True:
+            current = time.time()
             elapsed = 0.0
             UDPbroadcast(vehicle,s,b_msg)
             data, address = s.recvfrom(1024)
-			#print('Server received from {}:{}'.format(address, data.decode('utf-8')))
+        		#print('Server received from {}:{}'.format(address, data.decode('utf-8')))
             datadecode = data[1:len(data)-1].split(',')
             vehicleID = int(datadecode[0])
-			#print(address)
-			#print(datadecode)
+            #print(address)
+            #print(datadecode)
             if vehicleID == 65535:
-				print('get conmmand')
-				if datadecode[1] == 0.0 :
-					cmd = 'Takeoff'
-					print('Takeoff')
-				if datadecode[1] == 1.0 :
-					cmd = 'Swarm'
-					print('Swarm')
-					for k in range(1,len(datadecode)):
-						Swarm_vehicle[vehicle._heartbeat_system-1][k] = float(datadecode[k])
-				if datadecode[1] == 2.0 :
-					cmd = 'Mission'
-					print('Mission')
-				if datadecode[1] == 3.0 :
-					cmd = 'Stop'
-					print('Stop')
-				if datadecode[1] == 4.0 :
-					cmd = 'RTL'
-					print('RTL')
+        			print('get conmmand')
+        			if datadecode[1] == 0.0 :
+        				cmd = 'Takeoff'
+        				print('Takeoff')
+        			if datadecode[1] == 1.0 :
+        				cmd = 'Swarm'
+        				print('Swarm')
+        				for k in range(1,len(datadecode)):
+        					Swarm_vehicle[vehicle._heartbeat_system-1][k] = float(datadecode[k])
+        			if datadecode[1] == 2.0 :
+        				cmd = 'Mission'
+        				print('Mission')
+        			if datadecode[1] == 3.0 :
+        				cmd = 'Stop'
+        				print('Stop')
+        			if datadecode[1] == 4.0 :
+        				cmd = 'RTL'
+        				print('RTL')
 
             elif vehicleID != vehicle._heartbeat_system :
-				print(address)
-				print(datadecode)
-				Swarm_vehicle[vehicleID-1][0] = int(datadecode[0])
-				for k in range(1,len(datadecode)):
-					Swarm_vehicle[vehicleID-1][k] = float(datadecode[k])
+        			#print(address)
+        			#print(datadecode)
+        			Swarm_vehicle[vehicleID-1][0] = int(datadecode[0])
+        			for k in range(1,len(datadecode)):
+        				Swarm_vehicle[vehicleID-1][k] = float(datadecode[k])
 
             while elapsed < broadcast_rate:
           		elapsed = time.time() - current
-	except Exception,error:
-		print("Error on UDPlistener thread: "+str(error))
-		UDPlistener(vehicle,s,Swarm_vehicle,broadcast_rate)
+    except Exception,error:
+        print("Error on UDPlistener thread: "+str(error))
+        UDPlistener(vehicle,s,Swarm_vehicle,cmd,broadcast_rate)
 
-def OffboardCtrl(vehicle,Swarm_vehicle,cmd,mode,control_rate):
-	while True:
-		time0 = time.time()
-		dt = 0
+def MainControlLoop(vehicle,Swarm_vehicle,cmd,control_rate):
+    while True:
+        time0 = time.time()
+        dt = 0
 
-		if cmd == 'Takeoff':
+        if cmd == 'Takeoff':
 		   mode = 'TAKEOFF'
 		   arm_and_takeoff(10)
+		   cmd = 'Swarm'
 		   mode = 'AIR'
 		   print('>> Takeoff to 10m')
 
-		if ((cmd == 'Swarm') & (mode == 'AIR')):
+        if ((cmd == 'Swarm') & (mode == 'AIR')):
 			print('>> Switch to Swarm')
+			Swarm(vehicle,Swarm_vehicle)
 
-		if ((cmd == 'Mission') & (mode == 'AIR')):
-
+    	if ((cmd == 'Mission') & (mode == 'AIR')):
 			mode = 'MISSIOM'
 			ChangeMode(vehicle,'auto')
 			print(">> Switch to MISSIOM")
 
+        if cmd == 'RTL':
+    			ChangeMode(vehicle, 'RTL')
+    			mode = 'BACK'
+    			print(">> Time to go home")
 
-		if cmd == 'RTL':
-			ChangeMode(vehicle, 'RTL')
-			mode = 'BACK'
-			print(">> Time to go home")
-
-		while dt < control_rate:
-			dt = time.time() - time0
+    	while dt < control_rate:
+            dt = time.time() - time0
 
 def Swarm(Vehicle,Swarm_vehicle):
 	print('Swarm offboard control')
@@ -170,7 +170,7 @@ b_msg = [1.0,
 		0.0,
 		0.0]
 mode 				= 'GROUND'
-cmd                 ='Null'
+cmd                 ='Takeoff'
 Swarm_No = 4
 #Swarm_vehicle = numpy.zeros((Swarm_No,len(b_msg)))
 Swarm_vehicle = [[0 for i in range(len(b_msg))] for j in range(Swarm_No)]
@@ -203,8 +203,7 @@ vehicle = connect('udp:127.0.0.1:14561')
 vehicleThreads = []
 T1 = threading.Thread(target=UDPlistener,args=(vehicle,s,Swarm_vehicle,cmd,broadcast_rate))
 vehicleThreads.append(T1)
-T2 = threading.Thread(target=OffboardCtrl,args=(vehicle,Swarm_vehicle,cmd,mode,control_rate))
-vehicleThreads.append(T2)
+
 
 
  #----------------------------------------------------------
@@ -214,13 +213,16 @@ vehicleThreads.append(T2)
 
 if __name__ == '__main__':
 
+
+    for t in vehicleThreads:
+        t.setDaemon(True)
+        t.start()
+
     try:
-        for t in vehicleThreads:
-			t.setDaemon(True)
-			t.start()
+        MainControlLoop(vehicle,Swarm_vehicle,cmd,control_rate)
     except Exception,error:
         print( "Error on main script thread: "+str(error))
-        vehicle.close()
+        MainControlLoop(vehicle,Swarm_vehicle,cmd,control_rate)
 
 
 
